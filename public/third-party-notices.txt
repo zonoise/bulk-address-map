@@ -1,0 +1,20 @@
+Address Map Console - third-party notices
+
+Map display:
+- Map data (C) OpenStreetMap contributors.
+- OpenStreetMap data is available under the Open Database License.
+- OpenStreetMap copyright and license: https://www.openstreetmap.org/copyright
+
+Address search:
+- Address search results are provided by the Geospatial Information Authority of Japan.
+- GSI Maps terms of use: https://maps.gsi.go.jp/help/termsofuse.html
+
+Open source dependencies:
+- React: MIT License
+- React DOM: MIT License
+- Vite: MIT License
+- @vitejs/plugin-react: MIT License
+- Leaflet: BSD-2-Clause License
+- lucide-react: ISC License
+
+Build-time dependency licenses are recorded in package-lock.json.

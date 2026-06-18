@@ -595,6 +595,18 @@ select:focus {
   white-space: nowrap;
 }
 
+.map-footer a {
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 720;
+  text-decoration: none;
+}
+
+.map-footer a:hover {
+  color: #1e40af;
+  text-decoration: underline;
+}
+
 @media (max-width: 980px) {
   .app-shell {
     grid-template-columns: 1fr;

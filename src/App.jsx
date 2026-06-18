@@ -211,18 +211,6 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function buildNominatimQueries(address) {
-  const normalized = normalizeAddress(address);
-  const spaced = normalized
-    .replace(/(都|道|府|県)/g, "$1 ")
-    .replace(/(市|区|町|村)/g, "$1 ")
-    .replace(/([一-龥ぁ-んァ-ヶー])([0-9０-９])/g, "$1 $2")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  return Array.from(new Set([normalized, spaced]));
-}
-
 async function geocodeWithGsi(address) {
   const params = new URLSearchParams({ q: normalizeAddress(address) });
   const response = await fetch(`https://msearch.gsi.go.jp/address-search/AddressSearch?${params}`);
@@ -244,40 +232,6 @@ async function geocodeWithGsi(address) {
   };
 }
 
-async function geocodeWithNominatim(address) {
-  let lastError = new Error("候補が見つかりませんでした");
-
-  for (const query of buildNominatimQueries(address)) {
-    const params = new URLSearchParams({
-      q: query,
-      format: "jsonv2",
-      addressdetails: "1",
-      limit: "1",
-      countrycodes: "jp",
-      "accept-language": "ja",
-    });
-
-    try {
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`);
-      if (!response.ok) {
-        throw new Error("Nominatimから応答がありません");
-      }
-      const [result] = await response.json();
-      if (!result) continue;
-
-      return {
-        lat: Number(result.lat),
-        lng: Number(result.lon),
-        displayName: `${result.display_name}（Nominatim）`,
-      };
-    } catch (error) {
-      lastError = error instanceof Error ? error : lastError;
-    }
-  }
-
-  throw lastError;
-}
-
 async function geocodeAddress(address) {
   const normalized = normalizeAddress(address);
   const fallback = fallbackCoordinates.find((item) => normalized.includes(item.match));
@@ -285,18 +239,8 @@ async function geocodeAddress(address) {
   try {
     return await geocodeWithGsi(normalized);
   } catch (error) {
-    try {
-      return await geocodeWithNominatim(normalized);
-    } catch (secondError) {
-      if (fallback) return fallback;
-      const message =
-        secondError instanceof Error
-          ? secondError.message
-          : error instanceof Error
-            ? error.message
-            : "候補が見つかりませんでした";
-      throw new Error(message);
-    }
+    if (fallback) return fallback;
+    throw error instanceof Error ? error : new Error("国土地理院で候補が見つかりませんでした");
   }
 }
 
@@ -331,7 +275,7 @@ function AddressMap({ rows, selectedId, onSelect, fitSignal }) {
 
     L.control.zoom({ position: "topright" }).addTo(map.current);
     L.control.attribution({ position: "bottomright", prefix: false }).addTo(map.current);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }).addTo(map.current);
@@ -781,11 +725,17 @@ export function App() {
           </div>
           <div>
             <strong>国土地理院</strong>
-            <span>Nominatimは補助検索</span>
+            <span>住所検索の出典</span>
           </div>
           <div>
             <strong>Leaflet</strong>
             <span>地図表示ライブラリ</span>
+          </div>
+          <div>
+            <strong>出典</strong>
+            <a href="/third-party-notices.txt" target="_blank" rel="noreferrer">
+              ライセンス表示
+            </a>
           </div>
         </footer>
       </section>

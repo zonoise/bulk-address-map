@@ -14,13 +14,14 @@
 - Confirmed the local dev server responds at `http://127.0.0.1:5173/`.
 - Implemented the selected Operations Console structure: left address console, right Leaflet map, top map actions, bottom status summary.
 - Implemented functional controls: paste multiple addresses, add rows, edit rows inline, delete rows, clear results, search one row, search all rows, fit map to pins, CSV export.
-- Implemented geocoding through the Geospatial Information Authority of Japan first, then Nominatim as a fallback, with bundled fallback coordinates for included Japanese sample addresses.
+- Implemented geocoding through the Geospatial Information Authority of Japan only, with bundled fallback coordinates for included Japanese sample addresses.
 - Verified the user's failing Kagoshima batch-search case in the in-app browser: all 3 rows changed to `表示済み`, and 3 Leaflet markers rendered on the map.
 - Verified table paste handling in the in-app browser: tab-delimited table text and HTML table clipboard data both extract address values, and the add action appends them to the address list.
 - Replaced immediate table-paste extraction with a paste preview and address-column selector. Verified that a mixed table with code, phone, address, and postal-code columns selects the address column, hides non-address header columns, and reflects the selected column into the draft address field.
+- Removed the Nominatim fallback, switched OpenStreetMap tiles to `https://tile.openstreetmap.org/{z}/{x}/{y}.png`, and added public third-party notices for map data, GSI address search, and core OSS dependencies.
 
 **Follow-up Polish**
 - Capture a browser screenshot and compare it against the selected ImageGen option when a browser tool or explicit Playwright approval is available.
-- If this becomes a heavy-use internal tool, replace public Nominatim with a dedicated geocoding provider or a server-side proxy that respects provider usage policies.
+- If this becomes a heavy-use public tool, consider a server-side proxy/cache for GSI address search instead of calling the public endpoint directly from every browser session.
 
 final result: passed
