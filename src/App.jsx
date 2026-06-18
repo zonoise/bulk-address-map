@@ -82,6 +82,131 @@ function normalizeAddress(value) {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function normalizeCell(value) {
+  return value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function parseDelimitedText(text) {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      if (line.includes("\t")) return line.split("\t").map(normalizeCell);
+      return line.split(",").map(normalizeCell);
+    })
+    .filter((cells) => cells.some(Boolean));
+}
+
+function parseHtmlTable(html) {
+  if (!html || !html.includes("<table")) return [];
+
+  const document = new DOMParser().parseFromString(html, "text/html");
+  const rows = Array.from(document.querySelectorAll("tr")).map((row) =>
+    Array.from(row.querySelectorAll("th,td")).map((cell) => normalizeCell(cell.textContent ?? "")),
+  );
+
+  return rows.filter((cells) => cells.some(Boolean));
+}
+
+const addressHeaderPattern = /(住所|所在地|address)/i;
+const addressPartHeaderPattern = /(都道府県|市区町村|市町村|区町村|町名|番地|丁目|地番|建物|ビル)/i;
+const nonAddressHeaderPattern = /(電話|tel|fax|メール|mail|url|担当|氏名|名前|会社|店舗|名称|id|コード|備考)/i;
+
+function addressScore(value) {
+  const text = normalizeCell(value);
+  if (!text) return 0;
+  if (/https?:\/\/|@/.test(text)) return -5;
+  if (/^[0-9０-９+\-ー()\s]{8,}$/.test(text)) return -4;
+
+  let score = 0;
+  if (/[都道府県]/.test(text)) score += 5;
+  if (/(市|区|町|村)/.test(text)) score += 3;
+  if (/(丁目|番地|番|号|-|ー|−|[0-9０-９])/.test(text)) score += 2;
+  if (/〒/.test(text)) score += 1;
+  if (text.length >= 8) score += 1;
+  if (text.length >= 16) score += 1;
+  return score;
+}
+
+function uniqueAddresses(values) {
+  return Array.from(
+    new Set(
+      values
+        .map(normalizeAddress)
+        .filter(Boolean)
+        .filter((value) => addressScore(value) >= 2),
+    ),
+  );
+}
+
+function tableRowsFromClipboard({ html, text }) {
+  const htmlRows = parseHtmlTable(html);
+  const textRows = parseDelimitedText(text);
+  return htmlRows.length > 0 ? htmlRows : textRows;
+}
+
+function buildPastePreview({ html, text }) {
+  const rows = tableRowsFromClipboard({ html, text });
+  if (rows.length === 0) return null;
+
+  const columnCount = Math.max(...rows.map((row) => row.length));
+  const paddedRows = rows.map((row) => Array.from({ length: columnCount }, (_, index) => row[index] ?? ""));
+  const header = paddedRows[0];
+  const hasHeader = header.some(
+    (cell) => addressHeaderPattern.test(cell) || addressPartHeaderPattern.test(cell) || nonAddressHeaderPattern.test(cell),
+  );
+  const dataRows = hasHeader ? paddedRows.slice(1) : paddedRows;
+  const partIndexes = header
+    .map((cell, index) => (addressPartHeaderPattern.test(cell) && !nonAddressHeaderPattern.test(cell) ? index : -1))
+    .filter((index) => index >= 0);
+  const columns = [];
+
+  if (hasHeader && partIndexes.length > 1 && !header.some((cell) => addressHeaderPattern.test(cell))) {
+    const values = uniqueAddresses(dataRows.map((row) => partIndexes.map((index) => row[index]).filter(Boolean).join(" ")));
+    if (values.length > 0) {
+      columns.push({
+        key: "combined",
+        label: "住所系の列を結合",
+        count: values.length,
+        sample: values.slice(0, 3),
+        values,
+        score: 80 + values.length,
+      });
+    }
+  }
+
+  for (let index = 0; index < columnCount; index += 1) {
+    const label = hasHeader && header[index] ? header[index] : `列${index + 1}`;
+    const rawValues = dataRows.map((row) => row[index]).filter(Boolean);
+    const values = uniqueAddresses(rawValues);
+    const headerBoost =
+      addressHeaderPattern.test(label) ? 70 : addressPartHeaderPattern.test(label) ? 35 : nonAddressHeaderPattern.test(label) ? -60 : 0;
+    const contentScore = rawValues.reduce((total, value) => total + Math.max(addressScore(value), 0), 0);
+
+    columns.push({
+      key: `column-${index}`,
+      label,
+      count: values.length,
+      sample: values.slice(0, 3),
+      values,
+      score: headerBoost + contentScore + values.length * 4,
+    });
+  }
+
+  const scoredColumns = columns.filter((column) => column.count > 0).sort((a, b) => b.score - a.score || b.count - a.count);
+  const usefulColumns = scoredColumns.some((column) => column.score > 0)
+    ? scoredColumns.filter((column) => column.score > 0)
+    : scoredColumns;
+
+  return {
+    columns: usefulColumns,
+    rowCount: dataRows.length,
+    sourceColumnCount: columnCount,
+    selectedKey: usefulColumns[0]?.key ?? "",
+  };
+}
+
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -253,6 +378,9 @@ function AddressMap({ rows, selectedId, onSelect, fitSignal }) {
 export function App() {
   const [rows, setRows] = useState(initialRows);
   const [draft, setDraft] = useState("");
+  const [pasteNotice, setPasteNotice] = useState("");
+  const [pastePreview, setPastePreview] = useState(null);
+  const [selectedPasteColumn, setSelectedPasteColumn] = useState("");
   const [selectedId, setSelectedId] = useState(initialRows[0].id);
   const [fitSignal, setFitSignal] = useState(0);
   const [isSearching, setIsSearching] = useState(false);
@@ -269,6 +397,13 @@ export function App() {
   }, [rows]);
 
   const selectedRow = rows.find((row) => row.id === selectedId) ?? rows[0];
+
+  function appendDraftLines(lines) {
+    setDraft((current) => {
+      const prefix = current.trim() ? `${current.trimEnd()}\n` : "";
+      return `${prefix}${lines.join("\n")}`;
+    });
+  }
 
   function addDraftRows() {
     const additions = draft
@@ -288,6 +423,50 @@ export function App() {
     setRows((current) => [...current, ...additions]);
     setSelectedId(additions[0].id);
     setDraft("");
+    setPasteNotice("");
+    setPastePreview(null);
+  }
+
+  function handleDraftPaste(event) {
+    const html = event.clipboardData.getData("text/html");
+    const text = event.clipboardData.getData("text/plain");
+    const looksLikeTable = html.includes("<table") || text.includes("\t");
+
+    if (!looksLikeTable) {
+      setPasteNotice("");
+      return;
+    }
+
+    const preview = buildPastePreview({ html, text });
+    if (!preview || preview.columns.length === 0) {
+      setPasteNotice("表から住所列を見つけられませんでした。住所列だけコピーすると確実です。");
+      setPastePreview(null);
+      return;
+    }
+
+    event.preventDefault();
+    setPastePreview(preview);
+    setSelectedPasteColumn(preview.selectedKey);
+    setPasteNotice(`表を検出しました。${preview.rowCount}行から住所列を選んでください。`);
+  }
+
+  function applyPastePreview() {
+    const selected = pastePreview?.columns.find((column) => column.key === selectedPasteColumn);
+    if (!selected || selected.values.length === 0) {
+      setPasteNotice("この列には追加できる住所がありません。別の列を選んでください。");
+      return;
+    }
+
+    appendDraftLines(selected.values);
+    setPasteNotice(`「${selected.label}」列から${selected.values.length}件反映しました。`);
+    setPastePreview(null);
+    setSelectedPasteColumn("");
+  }
+
+  function cancelPastePreview() {
+    setPastePreview(null);
+    setSelectedPasteColumn("");
+    setPasteNotice("");
   }
 
   function updateRow(id, patch) {
@@ -388,9 +567,52 @@ export function App() {
           <textarea
             id="address-draft"
             value={draft}
-            onChange={(event) => setDraft(event.target.value)}
+            onChange={(event) => {
+              setDraft(event.target.value);
+              setPastePreview(null);
+            }}
+            onPaste={handleDraftPaste}
             placeholder={"例: 京都市中京区寺町通御池上る上本能寺前町488\n福岡市博多区博多駅中央街1-1"}
           />
+          {pasteNotice && <p className="paste-notice">{pasteNotice}</p>}
+          {pastePreview && (
+            <div className="paste-preview" aria-label="貼り付けプレビュー">
+              <div className="paste-preview-head">
+                <div>
+                  <strong>貼り付けプレビュー</strong>
+                  <span>
+                    {pastePreview.rowCount}行 / {pastePreview.sourceColumnCount}列
+                  </span>
+                </div>
+                <button className="text-button" onClick={cancelPastePreview}>
+                  キャンセル
+                </button>
+              </div>
+              <label htmlFor="paste-column">住所として使う列</label>
+              <select
+                id="paste-column"
+                value={selectedPasteColumn}
+                onChange={(event) => setSelectedPasteColumn(event.target.value)}
+              >
+                {pastePreview.columns.map((column) => (
+                  <option key={column.key} value={column.key}>
+                    {column.label}（{column.count}件）
+                  </option>
+                ))}
+              </select>
+              <div className="paste-samples">
+                {(pastePreview.columns.find((column) => column.key === selectedPasteColumn)?.sample ?? []).map(
+                  (sample) => (
+                    <span key={sample}>{sample}</span>
+                  ),
+                )}
+              </div>
+              <button className="secondary-button" onClick={applyPastePreview}>
+                <CopyPlus size={16} />
+                この列を住所欄に反映
+              </button>
+            </div>
+          )}
           <div className="action-grid">
             <button className="secondary-button" onClick={addDraftRows}>
               <CopyPlus size={16} />

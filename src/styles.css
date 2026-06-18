@@ -20,7 +20,9 @@ body {
 }
 
 button,
-textarea {
+textarea,
+input,
+select {
   font: inherit;
 }
 
@@ -130,6 +132,92 @@ textarea:focus {
 
 textarea::placeholder {
   color: #94a3b8;
+}
+
+.paste-notice {
+  margin-top: -4px;
+  color: #2563eb;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.paste-preview {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #f8fbff;
+  padding: 12px;
+}
+
+.paste-preview-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.paste-preview-head div {
+  display: grid;
+  gap: 3px;
+}
+
+.paste-preview-head strong {
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.paste-preview-head span,
+.paste-preview label {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.text-button {
+  cursor: pointer;
+  background: transparent;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 720;
+  padding: 0;
+}
+
+.text-button:hover {
+  color: #1e40af;
+}
+
+select {
+  min-height: 38px;
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #172033;
+  padding: 0 10px;
+  outline: none;
+}
+
+select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.13);
+}
+
+.paste-samples {
+  display: grid;
+  gap: 6px;
+}
+
+.paste-samples span {
+  overflow: hidden;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 7px 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .action-grid {

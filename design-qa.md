@@ -16,6 +16,8 @@
 - Implemented functional controls: paste multiple addresses, add rows, edit rows inline, delete rows, clear results, search one row, search all rows, fit map to pins, CSV export.
 - Implemented geocoding through the Geospatial Information Authority of Japan first, then Nominatim as a fallback, with bundled fallback coordinates for included Japanese sample addresses.
 - Verified the user's failing Kagoshima batch-search case in the in-app browser: all 3 rows changed to `表示済み`, and 3 Leaflet markers rendered on the map.
+- Verified table paste handling in the in-app browser: tab-delimited table text and HTML table clipboard data both extract address values, and the add action appends them to the address list.
+- Replaced immediate table-paste extraction with a paste preview and address-column selector. Verified that a mixed table with code, phone, address, and postal-code columns selects the address column, hides non-address header columns, and reflects the selected column into the draft address field.
 
 **Follow-up Polish**
 - Capture a browser screenshot and compare it against the selected ImageGen option when a browser tool or explicit Playwright approval is available.
