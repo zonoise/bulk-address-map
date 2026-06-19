@@ -220,6 +220,26 @@ select:focus {
   white-space: nowrap;
 }
 
+.step-hint {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.step-hint span {
+  display: inline-flex;
+  align-items: center;
+}
+
+.step-hint span:not(:last-child)::after {
+  content: "->";
+  margin-left: 6px;
+  color: #94a3b8;
+}
+
 .action-grid {
   display: grid;
   grid-template-columns: 1fr 1.2fr;
@@ -264,6 +284,11 @@ select:focus {
 .primary-button:disabled {
   cursor: not-allowed;
   opacity: 0.65;
+}
+
+.secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .secondary-button,

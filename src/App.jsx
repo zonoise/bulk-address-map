@@ -146,6 +146,12 @@ function tableRowsFromClipboard({ html, text }) {
   return htmlRows.length > 0 ? htmlRows : textRows;
 }
 
+function looksLikeDelimitedTable(text) {
+  const rows = parseDelimitedText(text);
+  const multiColumnRows = rows.filter((row) => row.length > 1);
+  return multiColumnRows.length >= 2;
+}
+
 function buildPastePreview({ html, text }) {
   const rows = tableRowsFromClipboard({ html, text });
   if (rows.length === 0) return null;
@@ -341,6 +347,10 @@ export function App() {
   }, [rows]);
 
   const selectedRow = rows.find((row) => row.id === selectedId) ?? rows[0];
+  const hasDraftContent = draft.trim().length > 0;
+  const hasUnsearchedRows = rows.some((row) => row.status === "idle" && row.address.trim());
+  const addButtonClass = hasDraftContent ? "primary-button" : "secondary-button";
+  const mapButtonClass = !hasDraftContent && hasUnsearchedRows ? "primary-button" : "secondary-button";
 
   function appendDraftLines(lines) {
     setDraft((current) => {
@@ -374,7 +384,7 @@ export function App() {
   function handleDraftPaste(event) {
     const html = event.clipboardData.getData("text/html");
     const text = event.clipboardData.getData("text/plain");
-    const looksLikeTable = html.includes("<table") || text.includes("\t");
+    const looksLikeTable = html.includes("<table") || looksLikeDelimitedTable(text);
 
     if (!looksLikeTable) {
       setPasteNotice("");
@@ -444,7 +454,7 @@ export function App() {
   }
 
   async function searchAll() {
-    const targets = rows.filter((row) => row.address.trim() && row.status !== "loading");
+    const targets = rows.filter((row) => row.address.trim() && row.status === "idle");
     if (targets.length === 0) return;
 
     setIsSearching(true);
@@ -553,18 +563,23 @@ export function App() {
               </div>
               <button className="secondary-button" onClick={applyPastePreview}>
                 <CopyPlus size={16} />
-                この列を住所欄に反映
+                この列を使う
               </button>
             </div>
           )}
+          <div className="step-hint" aria-label="操作ステップ">
+            <span>1. 住所を貼り付ける</span>
+            <span>2. 住所リストに追加</span>
+            <span>3. 地図に表示</span>
+          </div>
           <div className="action-grid">
-            <button className="secondary-button" onClick={addDraftRows}>
+            <button className={addButtonClass} onClick={addDraftRows} disabled={!hasDraftContent}>
               <CopyPlus size={16} />
-              追加
+              住所リストに追加
             </button>
-            <button className="primary-button" onClick={searchAll} disabled={isSearching || rows.length === 0}>
+            <button className={mapButtonClass} onClick={searchAll} disabled={isSearching || !hasUnsearchedRows}>
               <Search size={16} />
-              {isSearching ? "検索中" : "一括検索"}
+              {isSearching ? "表示中" : "地図に表示"}
             </button>
           </div>
         </section>
