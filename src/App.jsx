@@ -498,7 +498,7 @@ export function App() {
       <aside className="console-panel" aria-label="住所操作パネル">
         <div className="brand-row">
           <div>
-            <p className="eyebrow">Address Map Console</p>
+            <p className="eyebrow">Bulk Address Map</p>
             <h1>住所マップ</h1>
           </div>
           <button className="icon-button" onClick={() => setFitSignal((value) => value + 1)} title="すべてのピンを表示">

@@ -1,4 +1,4 @@
-Address Map Console - third-party notices
+Bulk Address Map - third-party notices
 
 Map display:
 - Map data (C) OpenStreetMap contributors.
