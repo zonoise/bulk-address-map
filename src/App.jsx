@@ -48,6 +48,7 @@ const fallbackCoordinates = [
 const initialRows = [
   {
     id: crypto.randomUUID(),
+    name: "",
     address: "東京都千代田区丸の内1丁目",
     status: "success",
     lat: 35.681236,
@@ -56,6 +57,7 @@ const initialRows = [
   },
   {
     id: crypto.randomUUID(),
+    name: "",
     address: "大阪市北区梅田3丁目",
     status: "success",
     lat: 34.702485,
@@ -64,6 +66,7 @@ const initialRows = [
   },
   {
     id: crypto.randomUUID(),
+    name: "",
     address: "札幌市中央区北1条西2丁目",
     status: "idle",
     lat: null,
@@ -81,6 +84,19 @@ const statusMeta = {
 
 function normalizeAddress(value) {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function draftLines(value) {
+  return value.split(/\n+/).map(normalizeAddress).filter(Boolean);
 }
 
 function wait(ms) {
@@ -164,14 +180,16 @@ function AddressMap({ rows, selectedId, onSelect, fitSignal }) {
 
     markers.current.clearLayers();
     validRows.forEach((row, index) => {
+      const popupTitle = row.name ? `${index + 1}. ${row.name}` : `${index + 1}. ${row.address}`;
       const marker = L.marker([row.lat, row.lng], {
-        title: row.address,
+        title: row.name || row.address,
         zIndexOffset: row.id === selectedId ? 1000 : index,
       });
 
       marker.bindPopup(`
-        <strong>${row.address}</strong>
-        <span>${row.displayName || "検索結果"}</span>
+        <strong>${escapeHtml(popupTitle)}</strong>
+        ${row.name ? `<span class="popup-address">${escapeHtml(row.address)}</span>` : ""}
+        <span>${escapeHtml(row.displayName || "検索結果")}</span>
       `);
       marker.on("click", () => onSelect(row.id));
       marker.addTo(markers.current);
@@ -198,6 +216,7 @@ function AddressMap({ rows, selectedId, onSelect, fitSignal }) {
 export function App() {
   const [rows, setRows] = useState(initialRows);
   const [draft, setDraft] = useState("");
+  const [draftEntries, setDraftEntries] = useState([]);
   const [pasteNotice, setPasteNotice] = useState("");
   const [pastePreview, setPastePreview] = useState(null);
   const [selectedPasteColumn, setSelectedPasteColumn] = useState("");
@@ -222,20 +241,30 @@ export function App() {
   const addButtonClass = hasDraftContent ? "primary-button" : "secondary-button";
   const mapButtonClass = !hasDraftContent && hasUnsearchedRows ? "primary-button" : "secondary-button";
 
-  function appendDraftLines(lines) {
-    setDraft((current) => {
-      const prefix = current.trim() ? `${current.trimEnd()}\n` : "";
-      return `${prefix}${lines.join("\n")}`;
-    });
+  function appendDraftEntries(entries) {
+    const currentLines = draftLines(draft);
+    const currentEntries =
+      draftEntries.length === currentLines.length
+        ? currentLines.map((address, index) => ({ address, name: draftEntries[index]?.name ?? "" }))
+        : currentLines.map((address) => ({ address, name: "" }));
+    const nextEntries = [
+      ...currentEntries,
+      ...entries.map((entry) => ({
+        address: normalizeAddress(entry.address ?? ""),
+        name: normalizeAddress(entry.name ?? ""),
+      })),
+    ].filter((entry) => entry.address);
+
+    setDraft(nextEntries.map((entry) => entry.address).join("\n"));
+    setDraftEntries(nextEntries);
   }
 
   function addDraftRows() {
-    const additions = draft
-      .split(/\n+/)
-      .map(normalizeAddress)
-      .filter(Boolean)
-      .map((address) => ({
+    const lines = draftLines(draft);
+    const additions = lines
+      .map((address, index) => ({
         id: crypto.randomUUID(),
+        name: draftEntries.length === lines.length ? draftEntries[index]?.name ?? "" : "",
         address,
         status: "idle",
         lat: null,
@@ -247,6 +276,7 @@ export function App() {
     setRows((current) => [...current, ...additions]);
     setSelectedId(additions[0].id);
     setDraft("");
+    setDraftEntries([]);
     setPasteNotice("");
     setPastePreview(null);
   }
@@ -281,7 +311,7 @@ export function App() {
       return;
     }
 
-    appendDraftLines(selected.values);
+    appendDraftEntries(selected.records ?? selected.values.map((address) => ({ address, name: "" })));
     setPasteNotice(`「${selected.label}」列から${selected.values.length}件反映しました。`);
     setPastePreview(null);
     setSelectedPasteColumn("");
@@ -358,9 +388,9 @@ export function App() {
   }
 
   function exportCsv() {
-    const header = ["住所", "ステータス", "緯度", "経度", "検索結果"];
+    const header = ["名称", "住所", "ステータス", "緯度", "経度", "検索結果"];
     const lines = rows.map((row) =>
-      [row.address, statusMeta[row.status]?.label ?? row.status, row.lat ?? "", row.lng ?? "", row.displayName ?? ""]
+      [row.name ?? "", row.address, statusMeta[row.status]?.label ?? row.status, row.lat ?? "", row.lng ?? "", row.displayName ?? ""]
         .map((value) => `"${String(value).replaceAll('"', '""')}"`)
         .join(","),
     );
@@ -393,6 +423,7 @@ export function App() {
             value={draft}
             onChange={(event) => {
               setDraft(event.target.value);
+              setDraftEntries([]);
               setPastePreview(null);
             }}
             onPaste={handleDraftPaste}
@@ -495,6 +526,7 @@ export function App() {
               >
                 <div className="row-index">{index + 1}</div>
                 <div className="row-main">
+                  {row.name && <span className="row-place-name">{row.name}</span>}
                   <input
                     className="row-title row-address-input"
                     value={row.address}
@@ -502,6 +534,7 @@ export function App() {
                     onChange={(event) =>
                       updateRow(row.id, {
                         address: event.target.value,
+                        name: row.name ?? "",
                         status: row.status === "success" ? "idle" : row.status,
                         lat: row.status === "success" ? null : row.lat,
                         lng: row.status === "success" ? null : row.lng,
@@ -549,6 +582,7 @@ export function App() {
           onClick={() => {
             const next = {
               id: crypto.randomUUID(),
+              name: "",
               address: "",
               status: "idle",
               lat: null,
@@ -590,7 +624,8 @@ export function App() {
                 <MapPin size={16} />
               </div>
               <div>
-                <p>{selectedRow.address}</p>
+                <p>{selectedRow.name || selectedRow.address}</p>
+                {selectedRow.name && <strong>{selectedRow.address}</strong>}
                 <span>
                   {selectedRow.status === "success"
                     ? selectedRow.displayName
