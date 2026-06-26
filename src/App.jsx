@@ -6,6 +6,7 @@ import {
   CopyPlus,
   Download,
   Eraser,
+  Link2,
   LocateFixed,
   MapPin,
   Plus,
@@ -17,6 +18,8 @@ import markerIcon from "leaflet/dist/images/marker-icon.png";
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerShadow from "leaflet/dist/images/marker-shadow.png";
 import { buildPastePreview, looksLikeDelimitedTable } from "./addressPaste";
+import { createId } from "./createId";
+import { decodeMapStateFromUrl, encodeMapStateForUrl, exportMapState, importMapState } from "./mapState";
 
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: markerIcon2x,
@@ -47,7 +50,7 @@ const fallbackCoordinates = [
 
 const initialRows = [
   {
-    id: crypto.randomUUID(),
+    id: createId(),
     name: "",
     address: "東京都千代田区丸の内1丁目",
     status: "success",
@@ -56,7 +59,7 @@ const initialRows = [
     displayName: "東京都千代田区丸の内1丁目付近",
   },
   {
-    id: crypto.randomUUID(),
+    id: createId(),
     name: "",
     address: "大阪市北区梅田3丁目",
     status: "success",
@@ -65,7 +68,7 @@ const initialRows = [
     displayName: "大阪府大阪市北区梅田3丁目付近",
   },
   {
-    id: crypto.randomUUID(),
+    id: createId(),
     name: "",
     address: "札幌市中央区北1条西2丁目",
     status: "idle",
@@ -81,6 +84,27 @@ const statusMeta = {
   success: { label: "表示済み", icon: CheckCircle2 },
   error: { label: "エラー", icon: TriangleAlert },
 };
+
+const SHARE_URL_LIMIT = 12000;
+
+function loadSharedRows() {
+  const shareData = new URLSearchParams(window.location.search).get("data");
+  if (!shareData) {
+    return { rows: initialRows, notice: "" };
+  }
+
+  try {
+    return {
+      rows: importMapState(decodeMapStateFromUrl(shareData)),
+      notice: "共有リンクから地図データを読み込みました。",
+    };
+  } catch (error) {
+    return {
+      rows: initialRows,
+      notice: error instanceof Error ? `共有データを読み込めませんでした: ${error.message}` : "共有データを読み込めませんでした。",
+    };
+  }
+}
 
 function normalizeAddress(value) {
   return value.replace(/\s+/g, " ").trim();
@@ -214,13 +238,16 @@ function AddressMap({ rows, selectedId, onSelect, fitSignal }) {
 }
 
 export function App() {
-  const [rows, setRows] = useState(initialRows);
+  const [initialShareState] = useState(loadSharedRows);
+  const [rows, setRows] = useState(initialShareState.rows);
   const [draft, setDraft] = useState("");
   const [draftEntries, setDraftEntries] = useState([]);
   const [pasteNotice, setPasteNotice] = useState("");
+  const [shareNotice, setShareNotice] = useState(initialShareState.notice);
+  const [shareUrl, setShareUrl] = useState("");
   const [pastePreview, setPastePreview] = useState(null);
   const [selectedPasteColumn, setSelectedPasteColumn] = useState("");
-  const [selectedId, setSelectedId] = useState(initialRows[0].id);
+  const [selectedId, setSelectedId] = useState(() => rows[0]?.id ?? "");
   const [fitSignal, setFitSignal] = useState(0);
   const [isSearching, setIsSearching] = useState(false);
 
@@ -240,6 +267,12 @@ export function App() {
   const hasUnsearchedRows = rows.some((row) => row.status === "idle" && row.address.trim());
   const addButtonClass = hasDraftContent ? "primary-button" : "secondary-button";
   const mapButtonClass = !hasDraftContent && hasUnsearchedRows ? "primary-button" : "secondary-button";
+
+  useEffect(() => {
+    if (!selectedId && rows[0]) {
+      setSelectedId(rows[0].id);
+    }
+  }, [rows, selectedId]);
 
   function appendDraftEntries(entries) {
     const currentLines = draftLines(draft);
@@ -263,7 +296,7 @@ export function App() {
     const lines = draftLines(draft);
     const additions = lines
       .map((address, index) => ({
-        id: crypto.randomUUID(),
+        id: createId(),
         name: draftEntries.length === lines.length ? draftEntries[index]?.name ?? "" : "",
         address,
         status: "idle",
@@ -403,6 +436,39 @@ export function App() {
     URL.revokeObjectURL(url);
   }
 
+  async function copyShareUrl() {
+    let nextShareUrl = "";
+
+    try {
+      const payload = exportMapState(rows);
+      const encoded = encodeMapStateForUrl(payload);
+      const url = new URL(window.location.href);
+
+      url.search = "";
+      url.hash = "";
+      url.searchParams.set("data", encoded);
+
+      nextShareUrl = url.toString();
+      setShareUrl(nextShareUrl);
+
+      if (nextShareUrl.length > SHARE_URL_LIMIT) {
+        setShareNotice("共有リンクが長すぎます。件数を減らすかCSV保存を使ってください。");
+        return;
+      }
+
+      await navigator.clipboard.writeText(nextShareUrl);
+      setShareNotice(`共有リンクをコピーしました。${payload.rows.length}件の住所データが含まれます。`);
+    } catch (error) {
+      setShareNotice(
+        nextShareUrl
+          ? "クリップボードにコピーできませんでした。下のURLをコピーしてください。"
+          : error instanceof Error
+            ? error.message
+            : "共有リンクを作成できませんでした。",
+      );
+    }
+  }
+
   return (
     <main className="app-shell">
       <aside className="console-panel" aria-label="住所操作パネル">
@@ -511,11 +577,26 @@ export function App() {
               <button className="icon-button" onClick={clearResults} title="検索結果をクリア">
                 <Eraser size={16} />
               </button>
-              <button className="icon-button" onClick={exportCsv} title="CSV保存">
+              <button className="toolbar-button" onClick={exportCsv}>
                 <Download size={16} />
+                CSV保存
+              </button>
+              <button className="toolbar-button" onClick={copyShareUrl}>
+                <Link2 size={16} />
+                共有リンク
               </button>
             </div>
           </div>
+          {shareNotice && <p className="share-notice">{shareNotice}</p>}
+          {shareUrl && (
+            <textarea
+              className="share-url-box"
+              value={shareUrl}
+              readOnly
+              aria-label="共有リンク"
+              onFocus={(event) => event.target.select()}
+            />
+          )}
 
           <div className="address-list">
             {rows.map((row, index) => (
@@ -581,7 +662,7 @@ export function App() {
           className="add-line-button"
           onClick={() => {
             const next = {
-              id: crypto.randomUUID(),
+              id: createId(),
               name: "",
               address: "",
               status: "idle",
@@ -608,10 +689,6 @@ export function App() {
             <button className="secondary-button compact" onClick={() => setFitSignal((value) => value + 1)}>
               <LocateFixed size={16} />
               全体表示
-            </button>
-            <button className="secondary-button compact" onClick={exportCsv}>
-              <Download size={16} />
-              CSV保存
             </button>
           </div>
         </div>
