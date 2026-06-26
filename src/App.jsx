@@ -11,6 +11,7 @@ import {
   MapPin,
   Plus,
   Search,
+  Tags,
   Trash2,
   TriangleAlert,
 } from "lucide-react";
@@ -172,7 +173,7 @@ function StatusPill({ status }) {
   );
 }
 
-function AddressMap({ rows, selectedId, onSelect, fitSignal }) {
+function AddressMap({ rows, selectedId, onSelect, fitSignal, showLabels }) {
   const mapNode = useRef(null);
   const map = useRef(null);
   const markers = useRef(L.layerGroup());
@@ -205,11 +206,20 @@ function AddressMap({ rows, selectedId, onSelect, fitSignal }) {
     markers.current.clearLayers();
     validRows.forEach((row, index) => {
       const popupTitle = row.name ? `${index + 1}. ${row.name}` : `${index + 1}. ${row.address}`;
+      const tooltipLabel = row.name ? `${index + 1}. ${row.name}` : `${index + 1}`;
       const marker = L.marker([row.lat, row.lng], {
         title: row.name || row.address,
         zIndexOffset: row.id === selectedId ? 1000 : index,
       });
 
+      if (showLabels) {
+        marker.bindTooltip(escapeHtml(tooltipLabel), {
+          className: row.id === selectedId ? "map-marker-label map-marker-label-selected" : "map-marker-label",
+          direction: "top",
+          offset: [0, -28],
+          permanent: true,
+        });
+      }
       marker.bindPopup(`
         <strong>${escapeHtml(popupTitle)}</strong>
         ${row.name ? `<span class="popup-address">${escapeHtml(row.address)}</span>` : ""}
@@ -217,12 +227,8 @@ function AddressMap({ rows, selectedId, onSelect, fitSignal }) {
       `);
       marker.on("click", () => onSelect(row.id));
       marker.addTo(markers.current);
-
-      if (row.id === selectedId) {
-        marker.openPopup();
-      }
     });
-  }, [validRows, selectedId, onSelect]);
+  }, [validRows, selectedId, onSelect, showLabels]);
 
   useEffect(() => {
     if (!map.current || validRows.length === 0) return;
@@ -250,6 +256,7 @@ export function App() {
   const [selectedLabelColumn, setSelectedLabelColumn] = useState("");
   const [selectedId, setSelectedId] = useState(() => rows[0]?.id ?? "");
   const [fitSignal, setFitSignal] = useState(0);
+  const [showMapLabels, setShowMapLabels] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
 
   const stats = useMemo(() => {
@@ -706,6 +713,15 @@ export function App() {
             <h2>ピン表示</h2>
           </div>
           <div className="map-actions">
+            <button
+              className={`secondary-button compact label-toggle ${showMapLabels ? "is-active" : ""}`}
+              type="button"
+              aria-pressed={showMapLabels}
+              onClick={() => setShowMapLabels((value) => !value)}
+            >
+              <Tags size={16} />
+              {showMapLabels ? "ラベル表示" : "ラベル非表示"}
+            </button>
             <button className="secondary-button compact" onClick={() => setFitSignal((value) => value + 1)}>
               <LocateFixed size={16} />
               全体表示
@@ -714,7 +730,13 @@ export function App() {
         </div>
 
         <div className="map-wrap">
-          <AddressMap rows={rows} selectedId={selectedId} onSelect={setSelectedId} fitSignal={fitSignal} />
+          <AddressMap
+            rows={rows}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            fitSignal={fitSignal}
+            showLabels={showMapLabels}
+          />
           {selectedRow && (
             <div className="selection-card">
               <div className="selection-number">

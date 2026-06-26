@@ -501,6 +501,16 @@ select:focus {
   gap: 8px;
 }
 
+.label-toggle {
+  min-width: 118px;
+}
+
+.label-toggle.is-active {
+  border-color: rgba(37, 99, 235, 0.35);
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
 .status {
   display: inline-flex;
   align-items: center;
@@ -589,6 +599,29 @@ select:focus {
 
 .leaflet-popup-content .popup-address {
   color: #334155;
+}
+
+.leaflet-tooltip.map-marker-label {
+  border: 1px solid rgba(15, 23, 42, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #172033;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 5px 9px;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.14);
+}
+
+.leaflet-tooltip.map-marker-label::before {
+  display: none;
+}
+
+.leaflet-tooltip.map-marker-label-selected {
+  border-color: rgba(37, 99, 235, 0.4);
+  background: #2563eb;
+  color: #ffffff;
 }
 
 .selection-card {
