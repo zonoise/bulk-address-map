@@ -73,6 +73,10 @@ function uniqueAddressRecords(records) {
   return unique;
 }
 
+function columnValues(rows, index) {
+  return rows.map((row) => normalizeCell(row[index] ?? "")).filter(Boolean);
+}
+
 function tableRowsFromClipboard({ html, text }) {
   const htmlRows = parseHtmlTable(html);
   const textRows = parseDelimitedText(text);
@@ -113,6 +117,8 @@ export function buildPastePreview({ html, text }) {
       columns.push({
         key: "combined",
         label: "住所系の列を結合",
+        type: "combined",
+        indexes: partIndexes,
         count: records.length,
         sample: records.map((record) => record.address).slice(0, 3),
         values: records.map((record) => record.address),
@@ -139,6 +145,8 @@ export function buildPastePreview({ html, text }) {
     columns.push({
       key: `column-${index}`,
       label,
+      type: "column",
+      index,
       count: values.length,
       sample: values.slice(0, 3),
       values,
@@ -151,11 +159,51 @@ export function buildPastePreview({ html, text }) {
   const usefulColumns = scoredColumns.some((column) => column.score > 0)
     ? scoredColumns.filter((column) => column.score > 0)
     : scoredColumns;
+  const labelColumns = header.map((cell, index) => {
+    const label = hasHeader && cell ? cell : `列${index + 1}`;
+    const values = columnValues(dataRows, index);
+
+    return {
+      key: `column-${index}`,
+      label,
+      index,
+      count: values.length,
+      sample: values.slice(0, 3),
+      score: nameColumnIndex === index ? 100 : nonNameHeaderPattern.test(label) ? -10 : values.length,
+    };
+  });
+  const selectedLabelKey =
+    nameColumnIndex >= 0 && usefulColumns[0]?.key !== `column-${nameColumnIndex}` ? `column-${nameColumnIndex}` : "";
 
   return {
     columns: usefulColumns,
+    labelColumns: labelColumns.sort((a, b) => b.score - a.score || a.index - b.index),
     rowCount: dataRows.length,
     sourceColumnCount: columnCount,
+    rows: dataRows,
     selectedKey: usefulColumns[0]?.key ?? "",
+    selectedLabelKey,
   };
+}
+
+export function getPasteRecords(preview, addressKey, labelKey = "") {
+  const addressColumn = preview?.columns.find((column) => column.key === addressKey);
+  if (!preview || !addressColumn) return [];
+
+  const labelColumn = preview.labelColumns?.find((column) => column.key === labelKey);
+  const records = uniqueAddressRecords(
+    preview.rows.map((row) => {
+      const address =
+        addressColumn.type === "combined"
+          ? addressColumn.indexes.map((index) => row[index]).filter(Boolean).join(" ")
+          : row[addressColumn.index];
+
+      return {
+        address,
+        name: labelColumn && labelColumn.key !== addressColumn.key ? row[labelColumn.index] : "",
+      };
+    }),
+  );
+
+  return records;
 }

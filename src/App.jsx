@@ -17,7 +17,7 @@ import {
 import markerIcon from "leaflet/dist/images/marker-icon.png";
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerShadow from "leaflet/dist/images/marker-shadow.png";
-import { buildPastePreview, looksLikeDelimitedTable } from "./addressPaste";
+import { buildPastePreview, getPasteRecords, looksLikeDelimitedTable } from "./addressPaste";
 import { createId } from "./createId";
 import { decodeMapStateFromUrl, encodeMapStateForUrl, exportMapState, importMapState } from "./mapState";
 
@@ -247,6 +247,7 @@ export function App() {
   const [shareUrl, setShareUrl] = useState("");
   const [pastePreview, setPastePreview] = useState(null);
   const [selectedPasteColumn, setSelectedPasteColumn] = useState("");
+  const [selectedLabelColumn, setSelectedLabelColumn] = useState("");
   const [selectedId, setSelectedId] = useState(() => rows[0]?.id ?? "");
   const [fitSignal, setFitSignal] = useState(0);
   const [isSearching, setIsSearching] = useState(false);
@@ -334,6 +335,7 @@ export function App() {
     event.preventDefault();
     setPastePreview(preview);
     setSelectedPasteColumn(preview.selectedKey);
+    setSelectedLabelColumn(preview.selectedLabelKey);
     setPasteNotice(`表を検出しました。${preview.rowCount}行から住所列を選んでください。`);
   }
 
@@ -344,15 +346,18 @@ export function App() {
       return;
     }
 
-    appendDraftEntries(selected.records ?? selected.values.map((address) => ({ address, name: "" })));
-    setPasteNotice(`「${selected.label}」列から${selected.values.length}件反映しました。`);
+    const records = getPasteRecords(pastePreview, selectedPasteColumn, selectedLabelColumn);
+    appendDraftEntries(records);
+    setPasteNotice(`「${selected.label}」列から${records.length}件反映しました。`);
     setPastePreview(null);
     setSelectedPasteColumn("");
+    setSelectedLabelColumn("");
   }
 
   function cancelPastePreview() {
     setPastePreview(null);
     setSelectedPasteColumn("");
+    setSelectedLabelColumn("");
     setPasteNotice("");
   }
 
@@ -521,12 +526,27 @@ export function App() {
                   </option>
                 ))}
               </select>
+              <label htmlFor="paste-label-column">ラベルとして使う列</label>
+              <select
+                id="paste-label-column"
+                value={selectedLabelColumn}
+                onChange={(event) => setSelectedLabelColumn(event.target.value)}
+              >
+                <option value="">なし</option>
+                {pastePreview.labelColumns.map((column) => (
+                  <option key={column.key} value={column.key} disabled={column.key === selectedPasteColumn}>
+                    {column.label}（{column.count}件）
+                  </option>
+                ))}
+              </select>
               <div className="paste-samples">
-                {(pastePreview.columns.find((column) => column.key === selectedPasteColumn)?.sample ?? []).map(
-                  (sample) => (
-                    <span key={sample}>{sample}</span>
-                  ),
-                )}
+                {getPasteRecords(pastePreview, selectedPasteColumn, selectedLabelColumn)
+                  .slice(0, 3)
+                  .map((record) => (
+                    <span key={`${record.name}-${record.address}`}>
+                      {record.name || record.address}
+                    </span>
+                  ))}
               </div>
               <button className="secondary-button" onClick={applyPastePreview}>
                 <CopyPlus size={16} />
