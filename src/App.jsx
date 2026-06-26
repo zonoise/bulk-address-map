@@ -727,6 +727,9 @@ export function App() {
           <div>
             <strong>Leaflet</strong>
             <span>地図表示ライブラリ</span>
+            <a className="ukraine-link" href="https://stand-with-ukraine.pp.ua" target="_blank" rel="noreferrer">
+              Stand with Ukraine
+            </a>
           </div>
           <div>
             <strong>出典</strong>
